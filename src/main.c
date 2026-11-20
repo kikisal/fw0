@@ -86,10 +86,10 @@ static shader_program_t default_Program;
 static material_t defaultMaterial;
 // cull CCW faces
 static const Vertex g_PlaneVertices[4] = {
-    { { -.5f, 0.0f, -0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {0.0f, 1.0f} },
-    { {  .5f, 0.0f, -0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {0.0f, 0.0f} },
-    { {  .5f, 0.0f,  0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {1.0f, 1.0f} },
-    { { -.5f, 0.0f,  0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {1.0f, 1.0f} }
+    { { -.5f, 0.0f,  -0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {0.0f, 1.0f} },
+    { { -.5f, 0.0f,   0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {0.0f, 0.0f} },
+    { {  .5f, 0.0f,   0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {1.0f, 0.0f} },
+    { {  .5f, 0.0f,  -0.5f }, {COLOR_RED[0], COLOR_RED[1], COLOR_RED[2]}, {1.0f, 1.0f} }
 };
 
 static uint16_t g_PlaneTriangles[] = {
@@ -97,15 +97,22 @@ static uint16_t g_PlaneTriangles[] = {
     2, 3, 0
 };
 
+// 3d camera
 typedef struct camera_st {
     vec3 pos;
     vec3 target;
 } camera_t;
 
+typedef struct renderer_st {
+    GLFWwindow* window;
+    camera_t*   camera;
+} renderer_t;
+
+static renderer_t s_Renderer = { NULL };
+
 int main(void) {
 
     glfwSetErrorCallback(glfwErrorCallback);
- 
     if (!glfwInit())
         exit(EXIT_FAILURE);
  
@@ -126,6 +133,8 @@ int main(void) {
     gladLoadGL();
     glfwSwapInterval(1);
 
+    s_Renderer.window = window;
+
     default_Program = shaderCreateProgram("DefaultProgram", "./res/vert.glsl", "./res/frag.glsl");
     
     if (default_Program.id == PROGRAM_INVALID)
@@ -134,27 +143,27 @@ int main(void) {
     defaultMaterial.program = default_Program;
     mesh_t triangleMesh     = meshFromArrayVertices((Vertex*)g_PlaneVertices, sizeof(g_PlaneVertices) / sizeof(g_PlaneVertices[0]), g_PlaneTriangles, 2);
 
-    int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
-    const float ratio = width / (float) height;
     
-    glViewport(0, 0, width, height);
+    camera_t camera = {
+        .pos    = {0.0f, 2.0f, 2.0f}, 
+        .target = {.0f, .0f, .0f}
+    };
+    
+    s_Renderer.camera = &camera;
+
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 
     while (!glfwWindowShouldClose(window))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
  
-        mat4x4 m, p, mvp;
+        mat4x4 m;
         mat4x4_identity(m);
-        mat4x4_rotate_Z(m, m, (float) glfwGetTime());
-        mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
-        mat4x4_mul(mvp, p, m);
+        // mat4x4_rotate_Z(m, m, (float) glfwGetTime());
 
-        glUseProgram(defaultMaterial.program.id);
-        meshRender(triangleMesh, mvp, defaultMaterial);
-        glUseProgram(0);
- 
+        meshRender(triangleMesh, m, defaultMaterial);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -342,7 +351,26 @@ shader_program_t shaderCreateProgram(const char* name, const char* vs_src, const
 }
 
 void meshRender(mesh_t mesh, mat4x4 matrix, material_t m) {
-    glUniformMatrix4fv(m.program.locs[UNIFORM_MVP_LOCATION], 1, GL_FALSE, (const GLfloat*) &matrix[0]);
+    mat4x4 p, mv, mvp;
+    
+    int width, height;
+    glfwGetFramebufferSize(s_Renderer.window, &width, &height);
+    const float ratio = width / (float) height;
+    
+
+    vec3 up = {0.0f, 1.0f, 0.0f};
+
+    mat4x4 viewMatrix;
+
+    mat4x4_look_at(viewMatrix, s_Renderer.camera->pos, s_Renderer.camera->target, up);
+    mat4x4_mul(mv, viewMatrix, matrix);
+    mat4x4_perspective(p, M_PI / 4, ratio, .1, 100.0f);
+    mat4x4_mul(mvp, p, mv);
+
+    glViewport(0, 0, width, height);
+
+    glUseProgram(m.program.id);
+    glUniformMatrix4fv(m.program.locs[UNIFORM_MVP_LOCATION], 1, GL_FALSE, (const GLfloat*) &mvp[0]);
     
     glBindVertexArray(mesh.vao);
     
@@ -358,8 +386,8 @@ void meshRender(mesh_t mesh, mat4x4 matrix, material_t m) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
     glBindVertexArray(0);
-
-} 
+    glUseProgram(0);
+}
 
 mesh_t meshFromArrayVertices(Vertex* vertices, size_t count, uint16_t* triangles, size_t triangle_count) {
     GLuint vbo, vao, ebo = 0;
