@@ -103,37 +103,22 @@ typedef struct camera_st {
     vec3 target;
 } camera_t;
 
+// -- Renderer module --
 typedef struct renderer_st {
     GLFWwindow* window;
     camera_t*   camera;
 } renderer_t;
 
+void rendererInitWindow(renderer_t* r, int w, int h, const char* title);
+
 static renderer_t s_Renderer = { NULL };
+
+// -- Finish Renderer module --
+
 
 int main(void) {
 
-    glfwSetErrorCallback(glfwErrorCallback);
-    if (!glfwInit())
-        exit(EXIT_FAILURE);
- 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
-    if (!window)
-    {
-        glfwTerminate();
-        exit(EXIT_FAILURE);
-    }
-
-    glfwSetKeyCallback(window, glfwKeyCallback);
-
-    glfwMakeContextCurrent(window);
-    gladLoadGL();
-    glfwSwapInterval(1);
-
-    s_Renderer.window = window;
+    rendererInitWindow(&s_Renderer, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE);
 
     default_Program = shaderCreateProgram("DefaultProgram", "./res/vert.glsl", "./res/frag.glsl");
     
@@ -154,7 +139,7 @@ int main(void) {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    while (!glfwWindowShouldClose(window))
+    while (!glfwWindowShouldClose(s_Renderer.window))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
  
@@ -164,11 +149,11 @@ int main(void) {
 
         meshRender(triangleMesh, m, defaultMaterial);
 
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(s_Renderer.window);
         glfwPollEvents();
     }
  
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(s_Renderer.window);
  
     glfwTerminate();
     exit(EXIT_SUCCESS);
@@ -429,3 +414,33 @@ mesh_t meshFromArrayVertices(Vertex* vertices, size_t count, uint16_t* triangles
 
     return m;
 }
+
+
+// -- Renderer module --
+
+void rendererInitWindow(renderer_t* r, int w, int h, const char* title) {
+    glfwSetErrorCallback(glfwErrorCallback);
+    if (!glfwInit())
+        exit(EXIT_FAILURE);
+ 
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    GLFWwindow* window = glfwCreateWindow(w, h, title, NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        exit(EXIT_FAILURE);
+    }
+
+    glfwSetKeyCallback(window, glfwKeyCallback);
+
+    glfwMakeContextCurrent(window);
+    gladLoadGL();
+    
+    glfwSwapInterval(1);
+    r->window = window;
+}
+
+// -- Finish Renderer module --
